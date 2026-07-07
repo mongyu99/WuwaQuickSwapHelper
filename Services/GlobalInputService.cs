@@ -1,52 +1,87 @@
 ﻿using SharpHook;
 using SharpHook.Data;
 using SharpHook.Native;
+using System.Diagnostics;
 using WuwaQuickSwapHelper.Models;
 
 namespace WuwaQuickSwapHelper.Services;
 
-public class GlobalInputService
+public class GlobalInputService : IDisposable
 {
-    private readonly EventLoopGlobalHook hook;
+    private readonly TaskPoolGlobalHook hook;
 
-    public event Action<InputEvent>? InputReceived;
+    public event Action<InputCode>? InputReceived;
 
     public GlobalInputService()
     {
-        hook = new EventLoopGlobalHook();
+        hook = new TaskPoolGlobalHook();
 
         hook.KeyPressed += OnKeyPressed;
-    }
-
-    private void OnKeyPressed(object? sender, KeyboardHookEventArgs e)
-    {
-        InputCode? code = e.Data.KeyCode switch
-        {
-            KeyCode.VcE => InputCode.E,
-            KeyCode.VcQ => InputCode.Q,
-            KeyCode.VcR => InputCode.R,
-
-            _ => null
-        };
-
-        if (code == null)
-            return;
-
-        InputReceived?.Invoke(new InputEvent
-        {
-            Type = InputEventType.KeyDown,
-            Code = code.Value,
-            Time = DateTime.Now
-        });
+        hook.MousePressed += OnMousePressed;
     }
 
     public async Task StartAsync()
     {
-        await hook.RunAsync();
+        try
+        {
+            Debug.WriteLine("Global Hook Started");
+
+            await hook.RunAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+        }
     }
 
-    public void Stop()
+    public void Dispose()
     {
-        hook.Stop();
+        hook.Dispose();
+    }
+
+    private void OnKeyPressed(object? sender, KeyboardHookEventArgs e)
+    {
+        Debug.WriteLine($"Key : {e.Data.KeyCode}");
+
+        switch (e.Data.KeyCode)
+        {
+            case KeyCode.VcQ:
+                InputReceived?.Invoke(InputCode.Q);
+                break;
+
+            case KeyCode.VcE:
+                InputReceived?.Invoke(InputCode.E);
+                break;
+
+            case KeyCode.VcR:
+                InputReceived?.Invoke(InputCode.R);
+                break;
+
+            case KeyCode.Vc1:
+                InputReceived?.Invoke(InputCode.Swap1);
+                break;
+
+            case KeyCode.Vc2:
+                InputReceived?.Invoke(InputCode.Swap2);
+                break;
+
+            case KeyCode.Vc3:
+                InputReceived?.Invoke(InputCode.Swap3);
+                break;
+
+            case KeyCode.VcSpace:
+                InputReceived?.Invoke(InputCode.Space);
+                break;
+        }
+    }
+
+    private void OnMousePressed(object? sender, MouseHookEventArgs e)
+    {
+        Debug.WriteLine($"Mouse : {e.Data.Button}");
+
+        if (e.Data.Button == MouseButton.Button1)
+        {
+            InputReceived?.Invoke(InputCode.LeftClick);
+        }
     }
 }

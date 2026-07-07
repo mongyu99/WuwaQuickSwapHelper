@@ -12,4 +12,8 @@
     <PackageReference Include="SharpHook" Version="7.1.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Data\" />
+  </ItemGroup>
+
 </Project>

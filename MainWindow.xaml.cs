@@ -1,5 +1,5 @@
 ﻿using System.Windows;
-using System.Windows.Input;
+using WuwaQuickSwapHelper.Engine;
 using WuwaQuickSwapHelper.Models;
 using WuwaQuickSwapHelper.Services;
 
@@ -7,49 +7,37 @@ namespace WuwaQuickSwapHelper;
 
 public partial class MainWindow : Window
 {
+    private readonly GlobalInputService inputService;
+    private readonly ComboEngine comboEngine = new();
+
     public MainWindow()
     {
         InitializeComponent();
 
+        inputService = new GlobalInputService();
         inputService.InputReceived += InputService_InputReceived;
 
-        _ = inputService.StartAsync();
-    }
-
-    private void Window_KeyDown(object sender, KeyEventArgs e)
-    {
-        switch (e.Key)
+        Loaded += async (_, _) =>
         {
-            case Key.E:
-                CurrentKey.Text = "E";
-                break;
+            await inputService.StartAsync();
+        };
 
-            case Key.Q:
-                CurrentKey.Text = "Q";
-                break;
-
-            case Key.R:
-                CurrentKey.Text = "R";
-                break;
-
-            default:
-                // 다른 키는 무시
-                break;
-        }
+        NextInputText.Text = comboEngine.CurrentInput.ToString();
+        CurrentInputText.Text = "-";
     }
 
-    private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        CurrentKey.Text = "Left Click";
-    }
-
-    private readonly GlobalInputService inputService = new();
-
-    private void InputService_InputReceived(InputEvent input)
+    private void InputService_InputReceived(InputCode input)
     {
         Dispatcher.Invoke(() =>
         {
-            CurrentKey.Text = input.Code.ToString();
+            // 현재 입력한 키 표시
+            CurrentInputText.Text = input.ToString();
+
+            // 맞는 입력이면 다음 키 변경
+            if (comboEngine.Push(input))
+            {
+                NextInputText.Text = comboEngine.CurrentInput.ToString();
+            }
         });
     }
 }
