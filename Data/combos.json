@@ -1,16 +1,13 @@
 [
   {
-    "id": "carlotta_basic",
-    "character": "Carlotta",
-    "name": "기본 콤보",
-    "description": "테스트",
-
+    "name": "Test Combo",
+    "description": "테스트 콤보",
     "steps": [
-      { "input": "E" },
-      { "input": "LeftClick" },
-      { "input": "LeftClick" },
-      { "input": "Dodge" },
-      { "input": "Q" }
+      "E",
+      "LeftClick",
+      "LeftClick",
+      "Space",
+      "Q"
     ]
   }
 ]
