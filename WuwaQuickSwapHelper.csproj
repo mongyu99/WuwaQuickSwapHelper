@@ -8,6 +8,10 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+	<PropertyGroup>
+		<RootNamespace>WuwaQuickSwapHelper</RootNamespace>
+	</PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="SharpHook" Version="7.1.2" />
   </ItemGroup>
