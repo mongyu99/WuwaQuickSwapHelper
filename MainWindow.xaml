@@ -42,6 +42,13 @@
 				FontSize="{Binding IsCurrent, Converter={StaticResource CurrentSizeConverter}}"
 				FontWeight="Bold"/>
 
+			<TextBlock
+                x:Name="CurrentModeText"
+                Text="MOVE MODE"
+                Margin="20,0,0,0"
+                Foreground="White"
+                FontSize="16"/>
+
         </StackPanel>
 
 
@@ -67,10 +74,10 @@
                 <DataTemplate>
 
                     <Border
-        Margin="3"
-        Padding="8"
-        CornerRadius="6"
-        Background="{Binding IsCurrent, Converter={StaticResource CurrentBackgroundConverter}}">
+                       Background="#CC111111"
+                        CornerRadius="10"
+                        Padding="15"
+                        MouseLeftButtonDown="Window_MouseLeftButtonDown">
 
 
                         <TextBlock

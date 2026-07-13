@@ -11,5 +11,7 @@ public enum InputCode
     Swap3,   // 3
 
     LeftClick,
-    Space
+    Space,
+
+    F10 // 이동 모드를 변경합니다.
 }

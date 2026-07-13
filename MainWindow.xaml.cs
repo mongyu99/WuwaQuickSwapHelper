@@ -1,10 +1,11 @@
-﻿using System.Windows;
+﻿using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using WuwaQuickSwapHelper.Engine;
 using WuwaQuickSwapHelper.Models;
 using WuwaQuickSwapHelper.Services;
-using System.Runtime.InteropServices;
 
 namespace WuwaQuickSwapHelper;
 
@@ -21,6 +22,10 @@ public partial class MainWindow : Window
     private const int WS_EX_TRANSPARENT = 0x20;
 
     private const int WS_EX_LAYERED = 0x80000;
+
+    private readonly OverlayService overlayService = new();
+
+    private bool clickThrough = false;
 
 
     [DllImport("user32.dll")]
@@ -70,7 +75,7 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
-            MakeClickThrough();
+            //MakeClickThrough();
 
             RefreshNextInputs();
 
@@ -81,6 +86,18 @@ public partial class MainWindow : Window
 
     private async void InputService_InputReceived(InputCode input)
     {
+        if (input == InputCode.F10)
+        {
+            clickThrough = !clickThrough;
+
+            overlayService.SetClickThrough(
+                this,
+                clickThrough);
+
+            return;
+        }
+
+
         bool success = false;
 
 
@@ -181,7 +198,7 @@ public partial class MainWindow : Window
         await Task.Delay(150);
 
     }
-    e
+    
     private void MakeClickThrough()
     {
         var hwnd = new System.Windows.Interop.WindowInteropHelper(this)
@@ -201,4 +218,28 @@ public partial class MainWindow : Window
             | WS_EX_LAYERED);
     }
 
+    private void Window_MouseLeftButtonDown(
+    object sender,
+    MouseButtonEventArgs e)
+    {
+        DragMove();
+    }
+
+    // 창을 움직일지를 정합니다.
+    private async void Window_KeyDown(
+    object sender,
+    KeyEventArgs e)
+    {
+        if (e.Key == Key.F10)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                clickThrough = !clickThrough;
+
+                overlayService.SetClickThrough(this,clickThrough);
+            });
+
+            return;
+        }
+    }
 }

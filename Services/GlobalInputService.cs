@@ -72,6 +72,10 @@ public class GlobalInputService : IDisposable
             case KeyCode.VcSpace:
                 InputReceived?.Invoke(InputCode.Space);
                 break;
+
+            case KeyCode.VcF10:
+                InputReceived?.Invoke(InputCode.F10);
+                break;
         }
     }
 
