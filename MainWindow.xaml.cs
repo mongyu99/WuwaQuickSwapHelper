@@ -88,29 +88,35 @@ public partial class MainWindow : Window
     {
         if (input == InputCode.F10)
         {
-            clickThrough = !clickThrough;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                clickThrough = !clickThrough;
 
-            overlayService.SetClickThrough(
-                this,
-                clickThrough);
+
+                overlayService.SetClickThrough(
+                    this,
+                    clickThrough);
+
+
+                CurrentModeText.Text =
+                    clickThrough
+                    ? "GAME MODE"
+                    : "MOVE MODE";
+            });
 
             return;
         }
 
-
         bool success = false;
-
 
         await Dispatcher.InvokeAsync(() =>
         {
             success = comboEngine.Push(input);
 
-
             if (success)
             {
                 RefreshNextInputs();
             }
-
         });
 
 
@@ -136,9 +142,7 @@ public partial class MainWindow : Window
             NextInputList.Items.Add(
                 new NextInputItem
                 {
-                    Text = inputs[i].ToString(),
-
-                    IsCurrent = i == 0
+                    Text = inputs[i].DisplayName(), IsCurrent = i == 0
                 }
             );
 
@@ -176,22 +180,9 @@ public partial class MainWindow : Window
             );
 
 
-            animation.KeyFrames.Add(
-                new System.Windows.Media.Animation.DiscreteDoubleKeyFrame(
-                    0,
-                    KeyTime.FromTimeSpan(
-                        TimeSpan.FromMilliseconds(150)
-                    )
-                )
-            );
+            animation.KeyFrames.Add(new System.Windows.Media.Animation.DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(150))));
 
-
-            ShakeTransform.BeginAnimation(
-                System.Windows.Media.TranslateTransform.XProperty,
-                animation
-            );
-
-
+            ShakeTransform.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, animation );
         });
 
 
@@ -201,21 +192,11 @@ public partial class MainWindow : Window
     
     private void MakeClickThrough()
     {
-        var hwnd = new System.Windows.Interop.WindowInteropHelper(this)
-            .Handle;
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
 
+        int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
 
-        int extendedStyle = GetWindowLong(
-            hwnd,
-            GWL_EXSTYLE);
-
-
-        SetWindowLong(
-            hwnd,
-            GWL_EXSTYLE,
-            extendedStyle
-            | WS_EX_TRANSPARENT
-            | WS_EX_LAYERED);
+        SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_LAYERED);
     }
 
     private void Window_MouseLeftButtonDown(

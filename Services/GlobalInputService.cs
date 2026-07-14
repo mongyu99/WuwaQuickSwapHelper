@@ -41,7 +41,17 @@ public class GlobalInputService : IDisposable
 
     private void OnKeyPressed(object? sender, KeyboardHookEventArgs e)
     {
-        Debug.WriteLine($"Key : {e.Data.KeyCode}");
+        Console.WriteLine($"Key : {e.Data.KeyCode}");
+
+        if (e.Data.KeyCode == KeyCode.VcF10)
+        {
+            Console.WriteLine("GLOBAL F10");
+
+            InputReceived?.Invoke(InputCode.F10);
+
+            return;
+        }
+
 
         switch (e.Data.KeyCode)
         {

@@ -45,7 +45,6 @@
 			<TextBlock
                 x:Name="CurrentModeText"
                 Text="MOVE MODE"
-                Margin="20,0,0,0"
                 Foreground="White"
                 FontSize="16"/>
 
