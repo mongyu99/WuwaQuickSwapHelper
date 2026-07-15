@@ -4,44 +4,57 @@ namespace WuwaQuickSwapHelper.Engine;
 
 public class ComboEngine
 {
-    private readonly List<InputCode> combo;
+    private readonly Combo combo;
 
-    private int currentIndex = 0;
+    private int currentIndex;
 
+    public Combo CurrentCombo => combo;
 
-    public ComboEngine(List<InputCode> steps)
+    public int CurrentIndex => currentIndex;
+
+    public ComboEngine(Combo combo)
     {
-        combo = steps;
+        this.combo = combo;
     }
 
-
-    public IReadOnlyList<InputCode> GetNextInputs(int count)
+    public PushResult Push(InputCode input)
     {
-        return combo
-            .Skip(currentIndex)
-            .Take(count)
-            .ToList();
-    }
+        var expected = combo.Steps[currentIndex];
 
-
-    public bool Push(InputCode input)
-    {
-        if (input != combo[currentIndex])
+        if (expected != input)
         {
-            Reset();
-            return false;
+            return new PushResult
+            {
+                State = PushState.Failed,
+                Index = currentIndex,
+                Input = input,
+                Expected = expected
+            };
         }
+
+        int successIndex = currentIndex;
 
         currentIndex++;
 
-        if (currentIndex >= combo.Count)
+        if (currentIndex >= combo.Steps.Count)
         {
-            Reset();
+            return new PushResult
+            {
+                State = PushState.Completed,
+                Index = successIndex,
+                Input = input,
+                Expected = expected
+            };
         }
 
-        return true;
+        return new PushResult
+        {
+            State = PushState.Success,
+            Index = successIndex,
+            Input = input,
+            Expected = expected
+        };
     }
-
 
     public void Reset()
     {

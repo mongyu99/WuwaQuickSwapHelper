@@ -27,6 +27,27 @@ public partial class MainWindow : Window
 
     private bool clickThrough = false;
 
+    private readonly List<NextInputItem> displayItems = new();
+
+    // 초기 구동 호출
+    private void InitializeDisplay()
+    {
+        displayItems.Clear();
+
+        foreach (var step in comboEngine.CurrentCombo.Steps)
+        {
+            displayItems.Add(new NextInputItem
+            {
+                Text = step.DisplayName(),
+                State = StepState.Waiting
+            });
+        }
+
+        displayItems[0].State = StepState.Current;
+
+        NextInputList.ItemsSource = displayItems;
+        NextInputList.Items.Refresh();
+    }
 
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(
@@ -59,25 +80,17 @@ public partial class MainWindow : Window
         var combos = loader.Load(path);
 
 
-        comboEngine = new ComboEngine(
-            combos[0].Steps
-        );
-
-
+        comboEngine = new ComboEngine( combos[0]);
+        InitializeDisplay();
 
         // 전역 입력 감지
         inputService = new GlobalInputService();
 
-
         inputService.InputReceived += InputService_InputReceived;
-
-
 
         Loaded += async (_, _) =>
         {
             //MakeClickThrough();
-
-            RefreshNextInputs();
 
             await inputService.StartAsync();
         };
@@ -86,68 +99,50 @@ public partial class MainWindow : Window
 
     private async void InputService_InputReceived(InputCode input)
     {
+        // F10 : 이동 모드 / 게임 모드 전환
         if (input == InputCode.F10)
         {
             await Dispatcher.InvokeAsync(() =>
             {
                 clickThrough = !clickThrough;
 
-
-                overlayService.SetClickThrough(
-                    this,
-                    clickThrough);
-
+                overlayService.SetClickThrough(this, clickThrough);
 
                 CurrentModeText.Text =
-                    clickThrough
-                    ? "GAME MODE"
-                    : "MOVE MODE";
+                    clickThrough ? "GAME MODE" : "MOVE MODE";
             });
 
             return;
         }
 
-        bool success = false;
-
-        await Dispatcher.InvokeAsync(() =>
+        await Dispatcher.InvokeAsync(async () =>
         {
-            success = comboEngine.Push(input);
+            var result = comboEngine.Push(input);
 
-            if (success)
+            UpdateDisplay(result);
+
+            switch (result.State)
             {
-                RefreshNextInputs();
+                case PushState.Success:
+                    break;
+
+                case PushState.Failed:
+
+                    await ShakeWindow();
+
+                    break;
+
+                case PushState.Completed:
+
+                    await Task.Delay(300);
+
+                    comboEngine.Reset();
+
+                    InitializeDisplay();
+
+                    break;
             }
         });
-
-
-        if (!success)
-        {
-            await ShakeWindow();
-        }
-    }
-
-    private void RefreshNextInputs()
-    {
-
-        NextInputList.Items.Clear();
-
-
-        var inputs = comboEngine.GetNextInputs(5);
-
-
-
-        for (int i = 0; i < inputs.Count; i++)
-        {
-
-            NextInputList.Items.Add(
-                new NextInputItem
-                {
-                    Text = inputs[i].DisplayName(), IsCurrent = i == 0
-                }
-            );
-
-        }
-
     }
 
     private async Task ShakeWindow()
@@ -222,5 +217,38 @@ public partial class MainWindow : Window
 
             return;
         }
+    }
+
+    private void UpdateDisplay(PushResult result)
+    {
+        switch (result.State)
+        {
+            case PushState.Success:
+
+                displayItems[result.Index].State = StepState.Success;
+
+                if (result.Index + 1 < displayItems.Count)
+                {
+                    displayItems[result.Index + 1].State = StepState.Current;
+                }
+
+                break;
+
+
+            case PushState.Failed:
+
+                displayItems[result.Index].State = StepState.Failed;
+
+                break;
+
+
+            case PushState.Completed:
+
+                displayItems[result.Index].State = StepState.Success;
+
+                break;
+        }
+
+        NextInputList.Items.Refresh();
     }
 }

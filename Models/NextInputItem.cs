@@ -1,8 +1,41 @@
-﻿namespace WuwaQuickSwapHelper.Models;
+﻿using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
-public class NextInputItem
+namespace WuwaQuickSwapHelper.Models;
+
+public class NextInputItem : INotifyPropertyChanged
 {
-    public string Text { get; set; } = "";
+    private string text = "";
 
-    public bool IsCurrent { get; set; }
+    private StepState state = StepState.Waiting;
+
+    public string Text
+    {
+        get => text;
+        set
+        {
+            text = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public StepState State
+    {
+        get => state;
+        set
+        {
+            state = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged(
+        [CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(propertyName));
+    }
 }

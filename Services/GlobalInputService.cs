@@ -10,6 +10,19 @@ public class GlobalInputService : IDisposable
 {
     private readonly TaskPoolGlobalHook hook;
 
+    private readonly Dictionary<InputCode, DateTime> lastInputTimes = new();
+
+    // 각 키 마다 딜레이를 추가합니다. ( ms )
+    private readonly Dictionary<InputCode, int> inputCooldown = new()
+    {
+        { InputCode.LeftClick, 200 },
+        { InputCode.Space, 150 },
+
+        // 추후 필요하면 추가
+        // { InputCode.Q, 100 },
+        // { InputCode.E, 100 },
+    };
+
     public event Action<InputCode>? InputReceived;
 
     public GlobalInputService()
@@ -47,7 +60,10 @@ public class GlobalInputService : IDisposable
         {
             Console.WriteLine("GLOBAL F10");
 
-            InputReceived?.Invoke(InputCode.F10);
+            if (!IsDuplicateInput(InputCode.LeftClick))
+            {
+                InputReceived?.Invoke(InputCode.LeftClick);
+            }
 
             return;
         }
@@ -80,7 +96,10 @@ public class GlobalInputService : IDisposable
                 break;
 
             case KeyCode.VcSpace:
-                InputReceived?.Invoke(InputCode.Space);
+                if (!IsDuplicateInput(InputCode.Space))
+                {
+                    InputReceived?.Invoke(InputCode.Space);
+                }
                 break;
 
             case KeyCode.VcF10:
@@ -97,5 +116,26 @@ public class GlobalInputService : IDisposable
         {
             InputReceived?.Invoke(InputCode.LeftClick);
         }
+    }
+
+    // 시간 이내에 동일한 키 입력 시 무시합니다.
+    private bool IsDuplicateInput(InputCode input)
+    {
+        if (!inputCooldown.TryGetValue(input, out int cooldown))
+            return false;
+
+        var now = DateTime.UtcNow;
+
+        if (lastInputTimes.TryGetValue(input, out var lastTime))
+        {
+            if ((now - lastTime).TotalMilliseconds < cooldown)
+            {
+                return true;
+            }
+        }
+
+        lastInputTimes[input] = now;
+
+        return false;
     }
 }
