@@ -13,5 +13,6 @@ public enum InputCode
     LeftClick,
     Space,
 
-    F10 // 이동 모드를 변경합니다.
+    F10, // 이동 모드를 변경합니다.
+    F9   // 사이클 리스트
 }

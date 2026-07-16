@@ -29,6 +29,11 @@ public partial class MainWindow : Window
 
     private readonly List<NextInputItem> displayItems = new();
 
+    // 저장된 퀵스왑 사이클을 불러옵니다.
+    private List<Combo> combos = new();
+
+    private int currentComboIndex = 0;
+
     // 초기 구동 호출
     private void InitializeDisplay()
     {
@@ -77,10 +82,10 @@ public partial class MainWindow : Window
         );
 
 
-        var combos = loader.Load(path);
+        combos = loader.Load(path);
 
+        comboEngine = new ComboEngine(combos[currentComboIndex]);
 
-        comboEngine = new ComboEngine( combos[0]);
         InitializeDisplay();
 
         // 전역 입력 감지
@@ -110,6 +115,17 @@ public partial class MainWindow : Window
 
                 CurrentModeText.Text =
                     clickThrough ? "GAME MODE" : "MOVE MODE";
+            });
+
+            return;
+        }
+
+        // 사이클 목록을 띄웁니다.
+        if (input == InputCode.F9)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                NextCombo();
             });
 
             return;
@@ -250,5 +266,30 @@ public partial class MainWindow : Window
         }
 
         NextInputList.Items.Refresh();
+    }
+
+    private void ChangeCombo(int index) // 지정한 사이클로 변경합니다.
+    {
+        if (index < 0 || index >= combos.Count)
+            return;
+
+        currentComboIndex = index;
+
+        comboEngine = new ComboEngine(combos[currentComboIndex]);
+
+        InitializeDisplay();
+
+        ComboNameText.Text =
+            comboEngine.CurrentCombo.Name;
+    }
+
+    private void NextCombo() // 다음 사이클로 변경합니다.
+    {
+        currentComboIndex++;
+
+        if (currentComboIndex >= combos.Count)
+            currentComboIndex = 0;
+
+        ChangeCombo(currentComboIndex);
     }
 }

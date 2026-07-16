@@ -11,12 +11,14 @@
 		Topmost="True"
         ShowInTaskbar="True">
 
-	<Window.Resources>
-		<!-- 현재 입력 키 크기 -->
-		<conv:CurrentSizeConverter x:Key="SizeConverter"/>
-		<!-- 현재 입력 키 배경 -->
+    <Window.Resources>
+        <!-- 현재 입력 키 크기 -->
+        <conv:CurrentSizeConverter x:Key="CurrentSizeConverter"/>
+        <!-- 현재 입력 키 배경 -->
+        <conv:CurrentBackgroundConverter x:Key="CurrentBackgroundConverter"/>
 		<conv:CurrentBackgroundConverter x:Key="BackgroundConverter"/>
-	</Window.Resources>
+		<conv:CurrentSizeConverter x:Key="SizeConverter"/>
+    </Window.Resources>
 
     <Grid Margin="20">
 
@@ -92,6 +94,29 @@
 
 
 		</ItemsControl>
+
+		<Grid
+        x:Name="CyclePanel"
+        Height="0"
+        VerticalAlignment="Top"
+        Margin="15,85,15,0"
+        ClipToBounds="True">
+
+			<Border
+				Background="#DD1E1E1E"
+				CornerRadius="10"
+				Padding="10">
+
+				<ListBox
+					x:Name="CycleList"
+					Background="Transparent"
+					BorderThickness="0"
+					Foreground="White"
+					DisplayMemberPath="Name"/>
+
+			</Border>
+
+		</Grid>
 
 
 	</Grid>

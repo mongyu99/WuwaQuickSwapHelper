@@ -105,6 +105,11 @@ public class GlobalInputService : IDisposable
             case KeyCode.VcF10:
                 InputReceived?.Invoke(InputCode.F10);
                 break;
+
+            case KeyCode.VcF9:
+                InputReceived?.Invoke(InputCode.F10);
+                break;
+
         }
     }
 
