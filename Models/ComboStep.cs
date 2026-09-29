@@ -4,5 +4,5 @@ public class ComboStep
 {
     public InputCode Input { get; set; }
 
-    public List<ComboStep> Steps { get; set; } = new();
+    public int Delay { get; set; } = 0;
 }

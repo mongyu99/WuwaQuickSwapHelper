@@ -54,20 +54,7 @@ public class GlobalInputService : IDisposable
 
     private void OnKeyPressed(object? sender, KeyboardHookEventArgs e)
     {
-        Console.WriteLine($"Key : {e.Data.KeyCode}");
-
-        if (e.Data.KeyCode == KeyCode.VcF10)
-        {
-            Console.WriteLine("GLOBAL F10");
-
-            if (!IsDuplicateInput(InputCode.LeftClick))
-            {
-                InputReceived?.Invoke(InputCode.LeftClick);
-            }
-
-            return;
-        }
-
+        Debug.WriteLine($"Key : {e.Data.KeyCode}");
 
         switch (e.Data.KeyCode)
         {
@@ -97,19 +84,16 @@ public class GlobalInputService : IDisposable
 
             case KeyCode.VcSpace:
                 if (!IsDuplicateInput(InputCode.Space))
-                {
                     InputReceived?.Invoke(InputCode.Space);
-                }
+                break;
+
+            case KeyCode.VcF9:
+                InputReceived?.Invoke(InputCode.F9);
                 break;
 
             case KeyCode.VcF10:
                 InputReceived?.Invoke(InputCode.F10);
                 break;
-
-            case KeyCode.VcF9:
-                InputReceived?.Invoke(InputCode.F10);
-                break;
-
         }
     }
 

@@ -9,7 +9,9 @@
         AllowsTransparency="True"
         Background="Transparent"
 		Topmost="True"
-        ShowInTaskbar="True">
+        ShowInTaskbar="True"
+		MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        KeyDown="Window_KeyDown">
 
     <Window.Resources>
         <!-- 현재 입력 키 크기 -->
@@ -42,12 +44,10 @@
 				FontSize="{Binding State, Converter={StaticResource CurrentSizeConverter}}"
 				FontWeight="Bold"/>
 
-			<TextBlock
-                x:Name="CurrentModeText"
-                Text="MOVE MODE"
-                Foreground="White"
-                FontSize="16"/>
+			<TextBlock x:Name="CurrentModeText" Text="MOVE MODE" Foreground="White" FontSize="16"/>
 
+			<Button x:Name="CycleButton" Width="90" Height="28" Margin="0,8,0,0" HorizontalAlignment="Left" Content="▼ Cycle" Click="CycleButton_Click"/>
+			
         </StackPanel>
 
 
@@ -95,12 +95,7 @@
 
 		</ItemsControl>
 
-		<Grid
-        x:Name="CyclePanel"
-        Height="0"
-        VerticalAlignment="Top"
-        Margin="15,85,15,0"
-        ClipToBounds="True">
+		<Grid x:Name="CyclePanel" Grid.Row="2" Height="0" Margin="0,15,0,0" VerticalAlignment="Top" ClipToBounds="True">
 
 			<Border
 				Background="#DD1E1E1E"

@@ -6,6 +6,7 @@ using System.Windows.Media.Animation;
 using WuwaQuickSwapHelper.Engine;
 using WuwaQuickSwapHelper.Models;
 using WuwaQuickSwapHelper.Services;
+using System.IO;
 
 namespace WuwaQuickSwapHelper;
 
@@ -29,10 +30,26 @@ public partial class MainWindow : Window
 
     private readonly List<NextInputItem> displayItems = new();
 
-    // 저장된 퀵스왑 사이클을 불러옵니다.
-    private List<Combo> combos = new();
+    // 사이클 목록 UI 제어용
+    private bool isCyclePanelOpen = false;
 
+    // 모든 사이클을 불러오고, 선택된 사이클에 대한 정보를 저장합니다.
+    private List<Combo> comboList = new();
     private int currentComboIndex = 0;
+
+    // 캐릭터별 사이클 (1, 2, 3 = 캐릭터 슬롯)
+    // TODO: 테스트용 사이클입니다. 추후 캐릭터별 실제 사이클로 교체하세요.
+    private readonly Dictionary<InputCode, Combo> characterCycles = new()
+    {
+        { InputCode.Swap1, new Combo { Name = "Character 1", Steps = new() { InputCode.Q } } },
+        { InputCode.Swap2, new Combo { Name = "Character 2", Steps = new() { InputCode.E } } },
+        { InputCode.Swap3, new Combo { Name = "Character 3", Steps = new() { InputCode.R } } },
+    };
+
+    private InputCode currentCharacter = InputCode.Swap1;
+
+    // 사이클 진행 여부
+    private bool isRunning = false;
 
     // 초기 구동 호출
     private void InitializeDisplay()
@@ -48,7 +65,10 @@ public partial class MainWindow : Window
             });
         }
 
-        displayItems[0].State = StepState.Current;
+        if (displayItems.Count > 0)
+        {
+            displayItems[0].State = StepState.Current;
+        }
 
         NextInputList.ItemsSource = displayItems;
         NextInputList.Items.Refresh();
@@ -70,40 +90,33 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-
-        // JSON 콤보 로딩
         var loader = new JsonComboLoader();
 
-
-        var path = System.IO.Path.Combine(
+        var path = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,
             "Data",
-            "combos.json"
-        );
+            "combos.json");
 
+        comboList = loader.Load(path);
 
-        combos = loader.Load(path);
-
-        comboEngine = new ComboEngine(combos[currentComboIndex]);
+        comboEngine = new ComboEngine(characterCycles[currentCharacter]);
 
         InitializeDisplay();
 
-        // 전역 입력 감지
         inputService = new GlobalInputService();
-
         inputService.InputReceived += InputService_InputReceived;
 
         Loaded += async (_, _) =>
         {
-            //MakeClickThrough();
-
             await inputService.StartAsync();
         };
-
     }
 
     private async void InputService_InputReceived(InputCode input)
     {
+
+        System.Diagnostics.Debug.WriteLine($"Input : {input}");
+
         // F10 : 이동 모드 / 게임 모드 전환
         if (input == InputCode.F10)
         {
@@ -115,19 +128,35 @@ public partial class MainWindow : Window
 
                 CurrentModeText.Text =
                     clickThrough ? "GAME MODE" : "MOVE MODE";
+
+                System.Diagnostics.Debug.WriteLine(CurrentModeText.Text);
             });
 
             return;
         }
 
-        // 사이클 목록을 띄웁니다.
+        // F9 : 현재 선택된 사이클 시작
         if (input == InputCode.F9)
         {
             await Dispatcher.InvokeAsync(() =>
             {
-                NextCombo();
+                StartCycle();
             });
 
+            return;
+        }
+
+        // 1, 2, 3 : 캐릭터 스왑 -> 해당 캐릭터의 사이클로 변경
+        if (input is InputCode.Swap1 or InputCode.Swap2 or InputCode.Swap3)
+        {
+            await Dispatcher.InvokeAsync(() => SwapCharacter(input));
+
+            return;
+        }
+
+        // 시작 상태가 아닌 경우 입력을 받지 않습니다.
+        if (!isRunning)
+        {
             return;
         }
 
@@ -214,7 +243,10 @@ public partial class MainWindow : Window
     object sender,
     MouseButtonEventArgs e)
     {
-        DragMove();
+        if (!clickThrough && e.ButtonState == MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
     }
 
     // 창을 움직일지를 정합니다.
@@ -268,28 +300,71 @@ public partial class MainWindow : Window
         NextInputList.Items.Refresh();
     }
 
-    private void ChangeCombo(int index) // 지정한 사이클로 변경합니다.
+    private void ToggleCyclePanel() // 사이클 목록 UI 제어
     {
-        if (index < 0 || index >= combos.Count)
-            return;
+        isCyclePanelOpen = !isCyclePanelOpen;
 
-        currentComboIndex = index;
-
-        comboEngine = new ComboEngine(combos[currentComboIndex]);
-
-        InitializeDisplay();
-
-        ComboNameText.Text =
-            comboEngine.CurrentCombo.Name;
+        if (isCyclePanelOpen)
+        {
+            CyclePanel.Height = 180;
+            CycleButton.Content = "▲ Cycle";
+        }
+        else
+        {
+            CyclePanel.Height = 0;
+            CycleButton.Content = "▼ Cycle";
+        }
     }
 
-    private void NextCombo() // 다음 사이클로 변경합니다.
+    private void CycleButton_Click(object sender, RoutedEventArgs e) // 사이클 버튼 클릭 이벤트
+    {
+        ToggleCyclePanel();
+    }
+
+    private void ChangeCombo(int index)
+    {
+        currentComboIndex = index;
+
+        comboEngine.SetCombo(comboList[index]);
+
+        InitializeDisplay();
+    }
+
+    private void StartCycle() // 현재 선택된 사이클을 초기화합니다.
+    {
+        if (isRunning)
+            return;
+
+        isRunning = true;
+
+        comboEngine.Reset();
+
+        InitializeDisplay();
+    }
+
+    private void NextCombo()
     {
         currentComboIndex++;
 
-        if (currentComboIndex >= combos.Count)
+        if (currentComboIndex >= comboList.Count)
+        {
             currentComboIndex = 0;
-
+        }
         ChangeCombo(currentComboIndex);
+    }
+
+    // 캐릭터(1, 2, 3)로 스왑하면 해당 캐릭터의 사이클로 변경합니다.
+    private void SwapCharacter(InputCode swapKey)
+    {
+        if (!characterCycles.TryGetValue(swapKey, out var combo))
+            return;
+
+        currentCharacter = swapKey;
+
+        isRunning = true;
+
+        comboEngine.SetCombo(combo);
+
+        InitializeDisplay();
     }
 }
