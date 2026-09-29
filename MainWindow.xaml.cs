@@ -356,15 +356,48 @@ public partial class MainWindow : Window
     // 캐릭터(1, 2, 3)로 스왑하면 해당 캐릭터의 사이클로 변경합니다.
     private void SwapCharacter(InputCode swapKey)
     {
-        if (!characterCycles.TryGetValue(swapKey, out var combo))
+        if (!isRunning || !characterCycles.TryGetValue(swapKey, out var combo))
             return;
 
         currentCharacter = swapKey;
 
-        isRunning = true;
-
         comboEngine.SetCombo(combo);
 
         InitializeDisplay();
+    }
+
+    // 시작 메뉴 / 사이클 목록 / 진행 화면 중 하나만 보여줍니다.
+    private void ShowView(UIElement view)
+    {
+        StartMenu.Visibility = view == StartMenu ? Visibility.Visible : Visibility.Collapsed;
+        CycleListView.Visibility = view == CycleListView ? Visibility.Visible : Visibility.Collapsed;
+        CycleView.Visibility = view == CycleView ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void StartButton_Click(object sender, RoutedEventArgs e) // 사이클 시작
+    {
+        currentCharacter = InputCode.Swap1;
+
+        comboEngine.SetCombo(characterCycles[currentCharacter]);
+
+        isRunning = true;
+
+        InitializeDisplay();
+
+        ShowView(CycleView);
+    }
+
+    private void ListButton_Click(object sender, RoutedEventArgs e) // 사이클 목록
+    {
+        CharacterCycleList.ItemsSource = characterCycles.Select(pair =>
+            $"{pair.Key.DisplayName()}  {pair.Value.Name} : " +
+            string.Join(" → ", pair.Value.Steps.Select(step => step.DisplayName())));
+
+        ShowView(CycleListView);
+    }
+
+    private void BackButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShowView(StartMenu);
     }
 }

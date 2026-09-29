@@ -24,6 +24,31 @@
 
     <Grid Margin="20">
 
+		<!-- 시작 메뉴 -->
+		<Border x:Name="StartMenu" Background="#DD1E1E1E" CornerRadius="10" Padding="16" HorizontalAlignment="Left" VerticalAlignment="Top">
+			<StackPanel>
+				<Button Width="160" Height="36" Content="사이클 시작" Click="StartButton_Click"/>
+				<Button Width="160" Height="36" Margin="0,8,0,0" Content="사이클 목록" Click="ListButton_Click"/>
+			</StackPanel>
+		</Border>
+
+		<!-- 사이클 목록 -->
+		<Border x:Name="CycleListView" Visibility="Collapsed" Background="#DD1E1E1E" CornerRadius="10" Padding="16" HorizontalAlignment="Left" VerticalAlignment="Top">
+			<StackPanel>
+				<ItemsControl x:Name="CharacterCycleList">
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<TextBlock Text="{Binding}" Foreground="White" FontSize="14" Margin="0,2"/>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+				<Button Width="160" Height="30" Margin="0,12,0,0" HorizontalAlignment="Left" Content="뒤로" Click="BackButton_Click"/>
+			</StackPanel>
+		</Border>
+
+		<!-- 사이클 진행 화면 -->
+		<Grid x:Name="CycleView" Visibility="Collapsed">
+
 		<Grid.RenderTransform>
 			<TranslateTransform x:Name="ShakeTransform"/>
 		</Grid.RenderTransform>
@@ -113,6 +138,7 @@
 
 		</Grid>
 
+		</Grid>
 
 	</Grid>
     
