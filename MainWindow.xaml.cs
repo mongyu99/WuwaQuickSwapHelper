@@ -15,7 +15,7 @@ namespace WuwaQuickSwapHelper;
 public partial class MainWindow : Window
 {
 
-    private readonly GlobalInputService inputService;
+    private readonly RawInputService inputService;
 
     private ComboEngine comboEngine;
 
@@ -42,7 +42,10 @@ public partial class MainWindow : Window
     // TODO: 테스트용 사이클입니다. 추후 캐릭터별 실제 사이클로 교체하세요.
     private readonly Dictionary<InputCode, Combo> characterCycles = new()
     {
-        { InputCode.Swap1, new Combo { Name = "Character 1", Steps = new() { InputCode.Q } } },
+        { InputCode.Swap1, new Combo { Name = "Character 1", Steps = new() {
+            InputCode.Q, InputCode.E, InputCode.Swap1,
+            InputCode.Q, InputCode.LeftClick, InputCode.Swap2,
+            InputCode.E, InputCode.LeftClick, InputCode.Swap1 } } },
         { InputCode.Swap2, new Combo { Name = "Character 2", Steps = new() { InputCode.E } } },
         { InputCode.Swap3, new Combo { Name = "Character 3", Steps = new() { InputCode.R } } },
     };
@@ -62,28 +65,25 @@ public partial class MainWindow : Window
     private int opacityLevelIndex = 0;
 
     // 초기 구동 호출
+    // 한 줄의 칸들을 만듭니다. 줄 끝의 스왑 키(1~3)는 다음 줄로 넘어가는 키라 강조합니다.
+    private List<NextInputItem> BuildLineItems(List<InputCode> line, bool isLoopLine)
+    {
+        return line.Select((step, i) => new NextInputItem
+        {
+            Text = step.DisplayName(),
+            State = step is InputCode.Swap1 or InputCode.Swap2 or InputCode.Swap3 ? StepState.Current : StepState.Waiting,
+            IsLoopStart = isLoopLine && i == 0
+        }).ToList();
+    }
+
+    // 현재 줄을 가로로 표시합니다. 스왑 키(1~3)를 누르면 다음 줄로 넘어갑니다.
     private void InitializeDisplay()
     {
         displayItems.Clear();
 
-        var combo = comboEngine.CurrentCombo;
-        int startIndex = comboEngine.CurrentIndex;
+        var hasLoop = comboEngine.CurrentCombo.HasLoop;
 
-        for (int i = 0; i < combo.Steps.Count; i++)
-        {
-            displayItems.Add(new NextInputItem
-            {
-                Text = combo.Steps[i].DisplayName(),
-                // 반복으로 건너뛴 앞 단계는 완료 상태로 표시합니다.
-                State = i < startIndex ? StepState.Success : StepState.Waiting,
-                IsLoopStart = combo.HasLoop && i == combo.LoopStartIndex
-            });
-        }
-
-        if (startIndex < displayItems.Count)
-        {
-            displayItems[startIndex].State = StepState.Current;
-        }
+        displayItems.AddRange(BuildLineItems(comboEngine.GetLine(0), hasLoop && comboEngine.CurrentLine == comboEngine.LoopLine));
 
         NextInputList.ItemsSource = displayItems;
         NextInputList.Items.Refresh();
@@ -118,15 +118,20 @@ public partial class MainWindow : Window
 
         comboEngine = new ComboEngine(characterCycles[currentCharacter]);
 
+        var settings = AppSettings.Load();
+
+        ApplyTheme(settings.Theme);
+
         // 체크리스트 상태 복원 (InitializeDisplay 전에 설정)
-        ShowNextLinesCheckBox.IsChecked = AppSettings.Load().ShowNextLines;
+        ShowNextLinesCheckBox.IsChecked = settings.ShowNextLines;
 
         InitializeDisplay();
 
-        inputService = new GlobalInputService();
+        inputService = new RawInputService();
         inputService.InputReceived += InputService_InputReceived;
+        inputService.MouseLeftPressed += InputService_MouseLeftPressed;
 
-        // 창이 닫히면(작업 표시줄 등) 전역 훅을 정리해 프로세스가 남지 않게 합니다.
+        // 창이 닫히면(작업 표시줄 등) 입력 수신을 정리하고 프로그램을 종료합니다.
         Closed += (_, _) =>
         {
             inputService.Dispose();
@@ -136,10 +141,8 @@ public partial class MainWindow : Window
         LocationChanged += (_, _) => RepositionCycleFlyout();
         SizeChanged += (_, _) => RepositionCycleFlyout();
 
-        Loaded += async (_, _) =>
-        {
-            await inputService.StartAsync();
-        };
+        // Raw Input은 창 핸들이 필요하므로 창이 만들어진 뒤 시작합니다.
+        Loaded += (_, _) => inputService.Start(this);
     }
 
     private async void InputService_InputReceived(InputCode input)
@@ -178,34 +181,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 1, 2, 3 중 아무 키나 누르면 사이클의 다음 단계로 넘어갑니다.
-        await Dispatcher.InvokeAsync(async () =>
+        // 1, 2, 3 스왑 키를 누르면 다음 줄로 넘어갑니다.
+        await Dispatcher.InvokeAsync(() =>
         {
-            var result = comboEngine.Advance();
+            comboEngine.NextLine();
 
-            UpdateDisplay(result);
-
-            switch (result.State)
-            {
-                case PushState.Success:
-                    break;
-
-                case PushState.Failed:
-
-                    await ShakeWindow();
-
-                    break;
-
-                case PushState.Completed:
-
-                    await Task.Delay(300);
-
-                    comboEngine.Restart();
-
-                    InitializeDisplay();
-
-                    break;
-            }
+            InitializeDisplay();
         });
     }
 
@@ -278,39 +259,6 @@ public partial class MainWindow : Window
         await Task.CompletedTask;
     }
 
-    private void UpdateDisplay(PushResult result)
-    {
-        switch (result.State)
-        {
-            case PushState.Success:
-
-                displayItems[result.Index].State = StepState.Success;
-
-                if (result.Index + 1 < displayItems.Count)
-                {
-                    displayItems[result.Index + 1].State = StepState.Current;
-                }
-
-                break;
-
-
-            case PushState.Failed:
-
-                displayItems[result.Index].State = StepState.Failed;
-
-                break;
-
-
-            case PushState.Completed:
-
-                displayItems[result.Index].State = StepState.Success;
-
-                break;
-        }
-
-        NextInputList.Items.Refresh();
-    }
-
     // 사이클 목록 패널을 오른쪽에서 밀어 넣거나 빼냅니다.
     private void ToggleCyclePanel()
     {
@@ -318,9 +266,7 @@ public partial class MainWindow : Window
 
         if (isCyclePanelOpen)
         {
-            // 열 때마다 Data 폴더를 다시 읽어 새로 추가된 파일도 보여줍니다.
-            CycleFileList.ItemsSource = new JsonComboLoader().LoadFileInfos(
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"));
+            RefreshCycleFileList();
 
             CycleFlyoutPopup.IsOpen = true;
         }
@@ -344,7 +290,8 @@ public partial class MainWindow : Window
 
         CycleFlyoutTransform.BeginAnimation(TranslateTransform.XProperty, slide);
 
-        CycleListButton.Content = isCyclePanelOpen ? "✕ 목록" : "☰ 목록";
+        CycleListButton.Content = isCyclePanelOpen ? "\uE711" : "\uE8FD";
+        CycleListButton.ToolTip = isCyclePanelOpen ? "사이클 목록 닫기" : "사이클 목록 열기";
     }
 
     // 창을 옮기거나 크기를 바꾸면 목록 팝업도 따라가게 합니다.
@@ -414,6 +361,8 @@ public partial class MainWindow : Window
         CycleView.Visibility = view == CycleView ? Visibility.Visible : Visibility.Collapsed;
         ImportView.Visibility = view == ImportView ? Visibility.Visible : Visibility.Collapsed;
         ReceiveView.Visibility = view == ReceiveView ? Visibility.Visible : Visibility.Collapsed;
+        EditView.Visibility = view == EditView ? Visibility.Visible : Visibility.Collapsed;
+        EditPickView.Visibility = view == EditPickView ? Visibility.Visible : Visibility.Collapsed;
         MenuButton.Visibility = view == StartMenu ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -421,7 +370,8 @@ public partial class MainWindow : Window
     {
         currentCharacter = InputCode.Swap1;
 
-        comboEngine.SetCombo(characterCycles[currentCharacter]);
+        // 목록에서 고른 사이클이 있으면 그것으로, 없으면 기본 사이클로 시작합니다.
+        comboEngine.SetCombo(activeCombo ?? characterCycles[currentCharacter]);
 
         SetRunning(true);
 
@@ -437,7 +387,53 @@ public partial class MainWindow : Window
 
         overlayService.SetClickThrough(this, clickThrough);
 
-        LockButton.Content = clickThrough ? "고정됨 (F10)" : "고정";
+        // 고정 중에는 핀 해제 아이콘 + 강조색
+        LockButton.Content = clickThrough ? "\uE77A" : "\uE718";
+        LockButton.ToolTip = clickThrough ? "고정됨 (핀을 클릭하거나 F10으로 해제)" : "고정 (클릭이 창을 통과합니다)";
+        LockButton.Foreground = clickThrough ? ThemeService.Get("AccentBrush") : ThemeService.Get("SubTextBrush");
+    }
+
+    // 고정 중에는 창이 마우스를 받지 못하므로, 전역 마우스 입력으로 핀 버튼 위를 눌렀는지 확인해 해제합니다.
+    private void InputService_MouseLeftPressed(int x, int y)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (!clickThrough || !LockButton.IsVisible)
+                return;
+
+            // 핀 버튼의 화면 좌표 (물리 픽셀)
+            var topLeft = LockButton.PointToScreen(new Point(0, 0));
+            var bottomRight = LockButton.PointToScreen(new Point(LockButton.ActualWidth, LockButton.ActualHeight));
+
+            if (x >= topLeft.X && x <= bottomRight.X && y >= topLeft.Y && y <= bottomRight.Y)
+            {
+                ToggleLock();
+            }
+        });
+    }
+
+    // ───── 라이트 / 다크 모드 ─────
+
+    private void ThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyTheme(ThemeService.Current == ThemeService.Dark ? ThemeService.Light : ThemeService.Dark);
+
+        var settings = AppSettings.Load();
+        settings.Theme = ThemeService.Current;
+        settings.Save();
+    }
+
+    private void ApplyTheme(string theme)
+    {
+        ThemeService.Apply(theme);
+
+        bool dark = ThemeService.Current == ThemeService.Dark;
+
+        ThemeButton.Content = dark ? "\uE708" : "\uE706";
+        ThemeButton.ToolTip = dark ? "라이트 모드로" : "다크 모드로";
+
+        // 코드에서 직접 넣은 색도 새 테마로 맞춥니다.
+        LockButton.Foreground = clickThrough ? ThemeService.Get("AccentBrush") : ThemeService.Get("SubTextBrush");
     }
 
     private void LockButton_Click(object sender, RoutedEventArgs e)
@@ -455,7 +451,8 @@ public partial class MainWindow : Window
     {
         isRunning = running;
 
-        PauseButton.Content = running ? "⏸ 멈춤" : "▶ 시작";
+        PauseButton.Content = running ? "\uE769" : "\uE768";
+        PauseButton.ToolTip = running ? "멈춤" : "시작";
     }
 
     private void ImportMenuButton_Click(object sender, RoutedEventArgs e) // 코드 입력 화면
@@ -545,9 +542,9 @@ public partial class MainWindow : Window
         return $"콤보 {combos.Count}개 저장됨 ({Path.GetFileName(path)})";
     }
 
-    // 다음 3줄 한번에 보기: 현재 줄 아래에 이 사이클이 끝난 뒤 이어질 2줄을 보여줍니다.
-    // 반복 구간이 있으면 반복 시작 위치부터, 없으면 처음부터 이어집니다.
-    private const int PreviewLineCount = 2;
+    // 5줄 한번에 보기: 현재 줄 아래에 이어질 4줄을 같은 크기로 미리 보여줍니다.
+    // 마지막 줄 다음에는 반복 구간(없으면 첫 줄)부터 이어집니다.
+    private const int PreviewLineCount = 4;
 
     private void UpdatePreviewLines()
     {
@@ -558,12 +555,9 @@ public partial class MainWindow : Window
         if (!showNextLines)
             return;
 
-        var combo = comboEngine.CurrentCombo;
-        int start = combo.HasLoop ? combo.LoopStartIndex : 0;
-
-        var nextLine = combo.Steps.Skip(start).Select(step => step.DisplayName()).ToList();
-
-        PreviewLines.ItemsSource = Enumerable.Repeat(nextLine, PreviewLineCount).ToList();
+        PreviewLines.ItemsSource = Enumerable.Range(1, PreviewLineCount)
+            .Select(offset => BuildLineItems(comboEngine.GetLine(offset), false))
+            .ToList();
     }
 
     private void ShowNextLinesCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -575,11 +569,316 @@ public partial class MainWindow : Window
         settings.Save();
     }
 
+    // 열 때마다 Data 폴더를 다시 읽어 새로 추가된 파일도 보여줍니다.
+    private void RefreshCycleFileList()
+    {
+        var infos = new JsonComboLoader().LoadFileInfos(JsonComboLoader.DataDirectory);
+
+        foreach (var info in infos)
+        {
+            info.IsActive = string.Equals(info.FilePath, activeCyclePath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        CycleFileList.ItemsSource = infos;
+    }
+
+    // 목록에서 고른 사이클 (null = 기본 테스트 사이클)
+    private Combo? activeCombo;
+    private string? activeCyclePath;
+
+    // 사이클 목록 항목 클릭 → 그 사이클로 교체합니다.
+    // 진행 중이면 바로 새 사이클로 이어서 진행하고, 메뉴 화면이면 사이클 시작 시 사용됩니다.
+    private void CycleFileListItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not CycleFileInfo info)
+            return;
+
+        var combo = new JsonComboLoader().Load(info.FilePath).FirstOrDefault();
+
+        if (combo == null)
+        {
+            MessageBox.Show(this, "잘못된 파일이라 불러올 수 없습니다.", "사이클 교체");
+            return;
+        }
+
+        activeCombo = combo;
+        activeCyclePath = info.FilePath;
+
+        comboEngine.SetCombo(combo);
+
+        InitializeDisplay();
+
+        RefreshCycleFileList();
+    }
+
+    // ───── 사이클 편집 ─────
+
+    // 편집 중인 파일 (null = 새로 만들기)
+    private string? editingPath;
+
+    // 파일에 콤보가 여러 개 있으면 첫 번째만 편집하고 나머지는 그대로 둡니다.
+    private List<Combo> editingOtherCombos = new();
+
+    private void EditMenuButton_Click(object sender, RoutedEventArgs e) // 사이클 편집: 파일 고르기 화면
+    {
+        var infos = new JsonComboLoader().LoadFileInfos(JsonComboLoader.DataDirectory);
+
+        EditPickList.ItemsSource = infos;
+        EditPickEmptyText.Visibility = infos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        ShowView(EditPickView);
+    }
+
+    private void CycleFileItem_Click(object sender, MouseButtonEventArgs e) // 파일 선택 → 편집
+    {
+        if ((sender as FrameworkElement)?.DataContext is CycleFileInfo info)
+        {
+            OpenEditor(info.FilePath);
+        }
+    }
+
+    private void NewCycleButton_Click(object sender, RoutedEventArgs e)
+    {
+        OpenEditor(null);
+    }
+
+    private void OpenEditor(string? path)
+    {
+        var combos = path == null ? new List<Combo>() : new JsonComboLoader().Load(path);
+        var combo = combos.FirstOrDefault() ?? new Combo();
+
+        editingPath = path;
+        editingOtherCombos = combos.Skip(1).ToList();
+
+        EditTitleText.Text = path == null ? "새 사이클" : $"사이클 편집 - {Path.GetFileName(path)}";
+        EditNameBox.Text = combo.Name;
+        EditCharactersBox.Text = string.Join(", ", combo.Characters);
+        EditAuthorBox.Text = combo.Author;
+        EditStepsBox.Text = StepsToText(combo.Steps);
+        EditLoopLineBox.Text = combo.HasLoop ? (new ComboEngine(combo).LoopLine + 1).ToString() : "0";
+        EditStatusText.Text = path != null && combos.Count == 0 ? "잘못된 파일이라 내용을 불러오지 못했습니다." : "";
+
+        SetRunning(false);
+        ShowView(EditView);
+    }
+
+    // 단계 → 편집용 텍스트 (스왑 키 뒤에서 줄바꿈)
+    private static string StepsToText(List<InputCode> steps)
+    {
+        return string.Join(Environment.NewLine, ComboEngine.SplitLines(steps)
+            .Select(line => string.Join(" ", line.Select(StepToToken))));
+    }
+
+    private static string StepToToken(InputCode step) => step switch
+    {
+        InputCode.Swap1 => "1",
+        InputCode.Swap2 => "2",
+        InputCode.Swap3 => "3",
+        InputCode.LeftClick => "평타",
+        InputCode.Space => "SPACE",
+        _ => step.ToString()
+    };
+
+    // 편집용 텍스트 → 단계. 모르는 키가 있으면 null과 오류 메시지를 돌려줍니다.
+    private static List<InputCode>? ParseSteps(string text, out string error)
+    {
+        error = "";
+        var steps = new List<InputCode>();
+
+        foreach (var token in text.Split(new[] { ' ', '\t', '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            InputCode? step = token.ToUpperInvariant() switch
+            {
+                "Q" => InputCode.Q,
+                "E" => InputCode.E,
+                "R" => InputCode.R,
+                "1" => InputCode.Swap1,
+                "2" => InputCode.Swap2,
+                "3" => InputCode.Swap3,
+                "클릭" or "평" or "평타" or "CLICK" or "🖱" => InputCode.LeftClick,
+                "SPACE" or "스페이스" or "점프" => InputCode.Space,
+                _ => null
+            };
+
+            if (step == null)
+            {
+                error = $"알 수 없는 키: {token}";
+                return null;
+            }
+
+            steps.Add(step.Value);
+        }
+
+        return steps;
+    }
+
+    // 편집 화면의 내용으로 콤보를 만들고 화이트리스트 검사까지 통과시킵니다.
+    private List<Combo>? BuildEditedCombos()
+    {
+        var steps = ParseSteps(EditStepsBox.Text, out var error);
+
+        if (steps == null)
+        {
+            EditStatusText.Text = error;
+            return null;
+        }
+
+        if (!int.TryParse(EditLoopLineBox.Text.Trim(), out var loopLine) || loopLine < 0)
+        {
+            EditStatusText.Text = "반복 시작 줄은 0 이상의 숫자여야 합니다.";
+            return null;
+        }
+
+        // 반복 시작 줄 번호 → 그 줄의 첫 단계 위치
+        var lines = ComboEngine.SplitLines(steps);
+
+        if (loopLine > lines.Count)
+        {
+            EditStatusText.Text = $"반복 시작 줄은 {lines.Count} 이하여야 합니다.";
+            return null;
+        }
+
+        var combo = new Combo
+        {
+            Name = EditNameBox.Text,
+            Author = EditAuthorBox.Text,
+            Characters = EditCharactersBox.Text
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList(),
+            Steps = steps,
+            LoopStartIndex = loopLine == 0 ? -1 : lines.Take(loopLine - 1).Sum(line => line.Count)
+        };
+
+        var combos = new List<Combo> { combo };
+        combos.AddRange(editingOtherCombos);
+
+        // 붙여넣기 / 받기와 똑같은 검사기를 거칩니다.
+        var json = System.Text.Json.JsonSerializer.Serialize(combos, ComboValidator.WriteOptions);
+
+        if (!ComboValidator.TryParse(json, out var validated, out error))
+        {
+            EditStatusText.Text = error;
+            return null;
+        }
+
+        return validated;
+    }
+
+    private void EditSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var combos = BuildEditedCombos();
+
+        if (combos == null)
+            return;
+
+        try
+        {
+            var loader = new JsonComboLoader();
+
+            if (editingPath == null)
+            {
+                editingPath = loader.Save(JsonComboLoader.DataDirectory, combos);
+            }
+            else
+            {
+                loader.Overwrite(editingPath, combos);
+            }
+
+            EditTitleText.Text = $"사이클 편집 - {Path.GetFileName(editingPath)}";
+            EditStatusText.Text = "저장됨";
+
+            if (isCyclePanelOpen)
+                RefreshCycleFileList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            EditStatusText.Text = $"저장 실패 - {ex.Message}";
+        }
+    }
+
+    private void EditStartButton_Click(object sender, RoutedEventArgs e) // 편집 중인 내용으로 바로 사이클 시작 (저장은 따로)
+    {
+        var combos = BuildEditedCombos();
+
+        if (combos == null)
+            return;
+
+        activeCombo = combos[0];
+        activeCyclePath = editingPath;
+
+        comboEngine.SetCombo(combos[0]);
+
+        SetRunning(true);
+
+        InitializeDisplay();
+
+        ShowView(CycleView);
+    }
+
     private void MenuButton_Click(object sender, RoutedEventArgs e) // 사이클을 멈추고 시작 메뉴로 돌아갑니다.
     {
         SetRunning(false);
 
+        SetCompact(false);
+
         ShowView(StartMenu);
+    }
+
+    // ───── 축소 모드 ─────
+
+    private bool isCompact = false;
+
+    // 축소 전 창 크기 (확대할 때 되돌립니다)
+    private Size normalSize;
+
+    private void CompactButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetCompact(!isCompact);
+    }
+
+    private void SetCompact(bool compact)
+    {
+        if (isCompact == compact)
+            return;
+
+        isCompact = compact;
+
+        var hidden = compact ? Visibility.Collapsed : Visibility.Visible;
+
+        // 위쪽 버튼 / 목록 버튼 / 체크리스트를 숨깁니다.
+        TopBar.Visibility = hidden;
+        MenuButton.Visibility = hidden;
+        CycleListButton.Visibility = hidden;
+        OptionChecklist.Visibility = hidden;
+
+        if (compact)
+        {
+            if (isCyclePanelOpen)
+                ToggleCyclePanel();
+
+            normalSize = new Size(Width, Height);
+
+            // 내용 크기에 딱 맞춥니다.
+            MinWidth = 0;
+            MinHeight = 0;
+            SizeToContent = SizeToContent.WidthAndHeight;
+            ResizeMode = ResizeMode.NoResize;
+
+            CompactButton.Content = "\uE740";
+            CompactButton.ToolTip = "확대";
+        }
+        else
+        {
+            SizeToContent = SizeToContent.Manual;
+            ResizeMode = ResizeMode.CanResizeWithGrip;
+            MinWidth = 260;
+            MinHeight = 140;
+            Width = normalSize.Width;
+            Height = normalSize.Height;
+
+            CompactButton.Content = "\uE73F";
+            CompactButton.ToolTip = "축소";
+        }
     }
 
     private void PauseButton_Click(object sender, RoutedEventArgs e) // 사이클 멈춤 / 다시 시작
@@ -595,7 +894,7 @@ public partial class MainWindow : Window
 
         // 배경과 버튼을 포함한 창 전체에 적용합니다.
         Opacity = opacity;
-        OpacityButton.Content = label;
+        OpacityButton.ToolTip = $"투명도: {label} (클릭: 불투명 → 반투명 → 투명)";
     }
 
 }

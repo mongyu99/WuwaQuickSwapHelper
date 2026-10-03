@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using WuwaQuickSwapHelper.Models;
 
@@ -63,6 +63,19 @@ public class JsonComboLoader
 		File.WriteAllText(path, JsonSerializer.Serialize(combos, ComboValidator.WriteOptions));
 
 		return path;
+	}
+
+	// Data 폴더 안의 기존 파일을 덮어씁니다. Data 폴더 밖의 경로는 거부합니다.
+	public void Overwrite(string path, List<Combo> combos)
+	{
+		var dataDir = Path.GetFullPath(DataDirectory) + Path.DirectorySeparatorChar;
+
+		if (!Path.GetFullPath(path).StartsWith(dataDir, StringComparison.OrdinalIgnoreCase))
+		{
+			throw new InvalidOperationException("Data 폴더 밖의 파일은 저장할 수 없습니다.");
+		}
+
+		File.WriteAllText(path, JsonSerializer.Serialize(combos, ComboValidator.WriteOptions));
 	}
 
 	// 폴더 안의 모든 사이클 JSON 파일 정보를 읽습니다. (이름 / 사용 캐릭터 / 제작자)

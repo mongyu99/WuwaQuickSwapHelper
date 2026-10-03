@@ -22,9 +22,6 @@
 		<DebugType>none</DebugType>
 	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="SharpHook" Version="7.1.2" />
-  </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Data\" />

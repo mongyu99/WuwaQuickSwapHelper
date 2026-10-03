@@ -6,7 +6,7 @@ public static class InputCodeExtensions
     {
         return input switch
         {
-            InputCode.LeftClick => "🖱",
+            InputCode.LeftClick => "평타",
 
             InputCode.Space => "SPACE",
 

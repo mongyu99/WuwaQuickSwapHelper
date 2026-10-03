@@ -13,8 +13,11 @@ public class AppSettings
     // 웹사이트에서 발급받은 개인 API 키
     public string ApiKey { get; set; } = "";
 
-    // 체크리스트: 다음 3줄 한번에 보기
+    // 체크리스트: 5줄 한번에 보기
     public bool ShowNextLines { get; set; } = false;
+
+    // 테마: "dark" / "light"
+    public string Theme { get; set; } = "dark";
 
     private static string FilePath =>
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
