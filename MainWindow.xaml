@@ -3,11 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:WuwaQuickSwapHelper.Converters"
         Title="WuwaQuickSwapHelper"
-        Width="560"
-        Height="260"
-        MinWidth="260"
-        MinHeight="140"
-        ResizeMode="CanResizeWithGrip"
+        Width="700"
+        Height="300"
 		WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -25,35 +22,27 @@
 		<conv:CurrentSizeConverter x:Key="SizeConverter"/>
     </Window.Resources>
 
-    <Grid>
-
-    <!-- 창 배경 (오른쪽 아래 모서리를 끌어 크기 조절) -->
-    <Border x:Name="RootBorder" Background="#E61E1E1E" BorderBrush="#555555" BorderThickness="1" CornerRadius="10">
-
-    <Grid Margin="8">
-
-		<Grid.RowDefinitions>
-			<RowDefinition Height="Auto"/>
-			<RowDefinition Height="*"/>
-		</Grid.RowDefinitions>
-
-		<!-- 왼쪽 위: 메뉴로 돌아가기 (진행 화면에서만 표시) -->
-		<Button x:Name="MenuButton" Grid.Row="0" Height="24" MinWidth="50" Padding="6,0" Margin="0,0,0,6" HorizontalAlignment="Left" Visibility="Collapsed" Content="← 메뉴" Click="MenuButton_Click"/>
-
-		<!-- 오른쪽 위 버튼: 목록 / 고정 / 투명도 / 종료 -->
-		<StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
-			<Button x:Name="LockButton" Height="24" MinWidth="50" Padding="6,0" Content="고정" ToolTip="고정하면 클릭이 창을 통과합니다. 해제: F10" Click="LockButton_Click"/>
-			<Button x:Name="OpacityButton" Height="24" MinWidth="50" Padding="6,0" Margin="4,0,0,0" Content="불투명" ToolTip="클릭: 불투명 → 반투명 → 투명" Click="OpacityButton_Click"/>
-			<Button Height="24" MinWidth="50" Padding="6,0" Margin="4,0,0,0" Content="종료" Click="ExitButton_Click"/>
-		</StackPanel>
-
-		<!-- 투명도 조절 대상 -->
-		<Grid x:Name="ContentRoot" Grid.Row="1">
+    <Grid Margin="20">
 
 		<!-- 시작 메뉴 -->
 		<Border x:Name="StartMenu" Background="#DD1E1E1E" CornerRadius="10" Padding="16" HorizontalAlignment="Left" VerticalAlignment="Top">
 			<StackPanel>
 				<Button Width="160" Height="36" Content="사이클 시작" Click="StartButton_Click"/>
+				<Button Width="160" Height="36" Margin="0,8,0,0" Content="사이클 목록" Click="ListButton_Click"/>
+			</StackPanel>
+		</Border>
+
+		<!-- 사이클 목록 -->
+		<Border x:Name="CycleListView" Visibility="Collapsed" Background="#DD1E1E1E" CornerRadius="10" Padding="16" HorizontalAlignment="Left" VerticalAlignment="Top">
+			<StackPanel>
+				<ItemsControl x:Name="CharacterCycleList">
+					<ItemsControl.ItemTemplate>
+						<DataTemplate>
+							<TextBlock Text="{Binding}" Foreground="Whte" FontSize="14" Margin="0,2"/>
+						</DataTemplate>
+					</ItemsControl.ItemTemplate>
+				</ItemsControl>
+				<Button Width="160" Height="30" Margin="0,12,0,0" HorizontalAlignment="Left" Content="뒤로" Click="BackButton_Click"/>
 			</StackPanel>
 		</Border>
 
@@ -67,8 +56,7 @@
 
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto"/>
-			<RowDefinition Height="10"/>
-			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="20"/>
 			<RowDefinition Height="Auto"/>
 		</Grid.RowDefinitions>
 
@@ -81,11 +69,9 @@
 				FontSize="{Binding State, Converter={StaticResource CurrentSizeConverter}}"
 				FontWeight="Bold"/>
 
+			<TextBlock x:Name="CurrentModeText" Text="MOVE MODE" Foreground="White" FontSize="16"/>
 
-			<StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-				<!-- 사이클 멈춤 / 시작 -->
-				<Button x:Name="PauseButton" Width="90" Height="28" Content="⏸ 멈춤" Click="PauseButton_Click"/>
-			</StackPanel>
+			<Button x:Name="CycleButton" Width="90" Height="28" Margin="0,8,0,0" HorizontalAlignment="Left" Content="▼ Cycle" Click="CycleButton_Click"/>
 			
         </StackPanel>
 
@@ -117,27 +103,13 @@
 							Margin="5"
 							Padding="10">
 
-						<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-							<!-- 반복 시작 지점 표시 -->
-							<TextBlock Text="↻ " Foreground="#FFD54F" FontWeight="Bold" VerticalAlignment="Center">
-								<TextBlock.Style>
-									<Style TargetType="TextBlock">
-										<Setter Property="Visibility" Value="Collapsed"/>
-										<Style.Triggers>
-											<DataTrigger Binding="{Binding IsLoopStart}" Value="True">
-												<Setter Property="Visibility" Value="Visible"/>
-											</DataTrigger>
-										</Style.Triggers>
-									</Style>
-								</TextBlock.Style>
-							</TextBlock>
-							<TextBlock
-								Text="{Binding Text}"
-								FontSize="{Binding State, Converter={StaticResource SizeConverter}}"
-								Foreground="White"
-								FontWeight="Bold"
-								VerticalAlignment="Center"/>
-						</StackPanel>
+						<TextBlock
+							Text="{Binding Text}"
+							FontSize="{Binding State, Converter={StaticResource SizeConverter}}"
+							Foreground="White"
+							FontWeight="Bold"
+							HorizontalAlignment="Center"
+							VerticalAlignment="Center"/>
 
 					</Border>
 
@@ -148,69 +120,27 @@
 
 		</ItemsControl>
 
-		</Grid>
+		<Grid x:Name="CyclePanel" Grid.Row="2" Height="0" Margin="0,15,0,0" VerticalAlignment="Top" ClipToBounds="True">
+
+			<Border
+				Background="#DD1E1E1E"
+				CornerRadius="10"
+				Padding="10">
+
+				<ListBox
+					x:Name="CycleList"
+					Background="Transparent"
+					BorderThickness="0"
+					Foreground="White"
+					DisplayMemberPath="Name"/>
+
+			</Border>
 
 		</Grid>
-
-		<!-- 사이클 파일 목록 버튼 (종료 버튼 아래) -->
-		<Grid Grid.Row="1">
-			<Button x:Name="CycleListButton" Height="24" MinWidth="50" Padding="6,0" HorizontalAlignment="Right" VerticalAlignment="Top" Content="☰ 목록" ToolTip="사이클 파일 목록 열기 / 닫기" Click="CycleListButton_Click"/>
 
 		</Grid>
 
 	</Grid>
-
-    </Border>
-
-
-    <!-- 사이클 파일 목록: 창 오른쪽 바깥에 창 높이만큼 슬라이드되어 나타납니다 -->
-    <Popup x:Name="CycleFlyoutPopup" PlacementTarget="{Binding ElementName=RootBorder}" Placement="Right"
-           AllowsTransparency="True" StaysOpen="True">
-        <Grid Width="324" Height="{Binding ActualHeight, ElementName=RootBorder}" ClipToBounds="True">
-		<Border x:Name="CycleFlyout" Width="320" Margin="4,0,0,0" HorizontalAlignment="Left"
-				Background="#F2252526" BorderBrush="#555555" BorderThickness="1" CornerRadius="8" Padding="8">
-			<Border.RenderTransform>
-				<TranslateTransform x:Name="CycleFlyoutTransform" X="-330"/>
-			</Border.RenderTransform>
-			<DockPanel>
-				<!-- 헤더 -->
-				<Grid DockPanel.Dock="Top" Margin="4,0,4,4">
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="4*"/>
-						<ColumnDefinition Width="4*"/>
-						<ColumnDefinition Width="3*"/>
-					</Grid.ColumnDefinitions>
-					<TextBlock Grid.Column="0" Text="이름" Foreground="#AAAAAA" FontSize="12" FontWeight="Bold"/>
-					<TextBlock Grid.Column="1" Text="사용 캐릭터" Foreground="#AAAAAA" FontSize="12" FontWeight="Bold"/>
-					<TextBlock Grid.Column="2" Text="제작자" Foreground="#AAAAAA" FontSize="12" FontWeight="Bold"/>
-				</Grid>
-				<Border DockPanel.Dock="Top" Height="1" Background="#555555" Margin="0,0,0,4"/>
-
-				<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
-					<ItemsControl x:Name="CycleFileList">
-						<ItemsControl.ItemTemplate>
-							<DataTemplate>
-								<Border Background="#30FFFFFF" CornerRadius="4" Padding="4,5" Margin="0,0,0,3" ToolTip="{Binding FilePath}">
-									<Grid>
-										<Grid.ColumnDefinitions>
-											<ColumnDefinition Width="4*"/>
-											<ColumnDefinition Width="4*"/>
-											<ColumnDefinition Width="3*"/>
-										</Grid.ColumnDefinitions>
-										<TextBlock Grid.Column="0" Text="{Binding Name}" Foreground="White" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"/>
-										<TextBlock Grid.Column="1" Text="{Binding Characters}" Foreground="White" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,6,0"/>
-										<TextBlock Grid.Column="2" Text="{Binding Author}" Foreground="White" FontSize="12" TextTrimming="CharacterEllipsis"/>
-									</Grid>
-								</Border>
-							</DataTemplate>
-						</ItemsControl.ItemTemplate>
-					</ItemsControl>
-				</ScrollViewer>
-			</DockPanel>
-		</Border>
-        </Grid>
-    </Popup>
-
-    </Grid>
+    
 
 </Window>
