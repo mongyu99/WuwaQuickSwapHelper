@@ -1,4 +1,4 @@
-using WuwaQuickSwapHelper.Models;
+﻿using WuwaQuickSwapHelper.Models;
 
 namespace WuwaQuickSwapHelper.Engine;
 
@@ -29,6 +29,11 @@ public class ComboEngine
         currentIndex = 0;
     }
 
+    public void Restart() // 사이클 완료 후 반복 구간이 있으면 그 위치부터, 없으면 처음부터 다시 시작합니다.
+    {
+        currentIndex = currentCombo!.HasLoop ? currentCombo.LoopStartIndex : 0;
+    }
+
     public InputCode GetCurrentInput() // 사용자가 눌러야 하는 키를 반환합니다.
     {
         return currentCombo!.Steps[currentIndex];
@@ -37,6 +42,11 @@ public class ComboEngine
     public bool IsCompleted() // 사이클이 끝났나요?
     {
         return currentIndex >= currentCombo!.Steps.Count;
+    }
+
+    public PushResult Advance() // 어떤 키든 현재 단계를 성공 처리하고 다음 단계로 넘어갑니다.
+    {
+        return Push(GetCurrentInput());
     }
 
     public PushResult Push(InputCode input)

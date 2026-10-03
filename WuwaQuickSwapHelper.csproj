@@ -12,6 +12,16 @@
 		<RootNamespace>WuwaQuickSwapHelper</RootNamespace>
 	</PropertyGroup>
 
+	<!-- 배포용: .NET 설치 없이 실행되는 단일 exe (dotnet publish -c Release) -->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>true</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		<DebugType>none</DebugType>
+	</PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="SharpHook" Version="7.1.2" />
   </ItemGroup>
@@ -23,6 +33,8 @@
   <ItemGroup>
     <None Update="Data\combos.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </None>
   </ItemGroup>
 

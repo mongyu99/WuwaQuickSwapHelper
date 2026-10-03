@@ -51,23 +51,37 @@ public partial class MainWindow : Window
     // 사이클 진행 여부
     private bool isRunning = false;
 
+    // 창 투명도 단계 (불투명 / 반투명 / 투명)
+    private static readonly (double Opacity, string Label)[] opacityLevels =
+    {
+        (1.0, "불투명"),
+        (0.65, "반투명"),
+        (0.35, "투명"),
+    };
+    private int opacityLevelIndex = 0;
+
     // 초기 구동 호출
     private void InitializeDisplay()
     {
         displayItems.Clear();
 
-        foreach (var step in comboEngine.CurrentCombo.Steps)
+        var combo = comboEngine.CurrentCombo;
+        int startIndex = comboEngine.CurrentIndex;
+
+        for (int i = 0; i < combo.Steps.Count; i++)
         {
             displayItems.Add(new NextInputItem
             {
-                Text = step.DisplayName(),
-                State = StepState.Waiting
+                Text = combo.Steps[i].DisplayName(),
+                // 반복으로 건너뛴 앞 단계는 완료 상태로 표시합니다.
+                State = i < startIndex ? StepState.Success : StepState.Waiting,
+                IsLoopStart = combo.HasLoop && i == combo.LoopStartIndex
             });
         }
 
-        if (displayItems.Count > 0)
+        if (startIndex < displayItems.Count)
         {
-            displayItems[0].State = StepState.Current;
+            displayItems[startIndex].State = StepState.Current;
         }
 
         NextInputList.ItemsSource = displayItems;
@@ -106,6 +120,16 @@ public partial class MainWindow : Window
         inputService = new GlobalInputService();
         inputService.InputReceived += InputService_InputReceived;
 
+        // 창이 닫히면(작업 표시줄 등) 전역 훅을 정리해 프로세스가 남지 않게 합니다.
+        Closed += (_, _) =>
+        {
+            inputService.Dispose();
+            Application.Current.Shutdown();
+        };
+
+        LocationChanged += (_, _) => RepositionCycleFlyout();
+        SizeChanged += (_, _) => RepositionCycleFlyout();
+
         Loaded += async (_, _) =>
         {
             await inputService.StartAsync();
@@ -120,17 +144,7 @@ public partial class MainWindow : Window
         // F10 : 이동 모드 / 게임 모드 전환
         if (input == InputCode.F10)
         {
-            await Dispatcher.InvokeAsync(() =>
-            {
-                clickThrough = !clickThrough;
-
-                overlayService.SetClickThrough(this, clickThrough);
-
-                CurrentModeText.Text =
-                    clickThrough ? "GAME MODE" : "MOVE MODE";
-
-                System.Diagnostics.Debug.WriteLine(CurrentModeText.Text);
-            });
+            await Dispatcher.InvokeAsync(ToggleLock);
 
             return;
         }
@@ -146,11 +160,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 1, 2, 3 : 캐릭터 스왑 -> 해당 캐릭터의 사이클로 변경
-        if (input is InputCode.Swap1 or InputCode.Swap2 or InputCode.Swap3)
+        // 1, 2, 3 이외의 키는 무시합니다.
+        if (input is not (InputCode.Swap1 or InputCode.Swap2 or InputCode.Swap3))
         {
-            await Dispatcher.InvokeAsync(() => SwapCharacter(input));
-
             return;
         }
 
@@ -160,9 +172,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 1, 2, 3 중 아무 키나 누르면 사이클의 다음 단계로 넘어갑니다.
         await Dispatcher.InvokeAsync(async () =>
         {
-            var result = comboEngine.Push(input);
+            var result = comboEngine.Advance();
 
             UpdateDisplay(result);
 
@@ -181,7 +194,7 @@ public partial class MainWindow : Window
 
                     await Task.Delay(300);
 
-                    comboEngine.Reset();
+                    comboEngine.Restart();
 
                     InitializeDisplay();
 
@@ -254,17 +267,9 @@ public partial class MainWindow : Window
     object sender,
     KeyEventArgs e)
     {
-        if (e.Key == Key.F10)
-        {
-            await Dispatcher.InvokeAsync(() =>
-            {
-                clickThrough = !clickThrough;
-
-                overlayService.SetClickThrough(this,clickThrough);
-            });
-
-            return;
-        }
+        // F10은 전역 입력(InputService_InputReceived)에서 처리합니다.
+        // 여기서도 처리하면 창에 포커스가 있을 때 두 번 전환되어 상쇄됩니다.
+        await Task.CompletedTask;
     }
 
     private void UpdateDisplay(PushResult result)
@@ -300,23 +305,53 @@ public partial class MainWindow : Window
         NextInputList.Items.Refresh();
     }
 
-    private void ToggleCyclePanel() // 사이클 목록 UI 제어
+    // 사이클 목록 패널을 오른쪽에서 밀어 넣거나 빼냅니다.
+    private void ToggleCyclePanel()
     {
         isCyclePanelOpen = !isCyclePanelOpen;
 
         if (isCyclePanelOpen)
         {
-            CyclePanel.Height = 180;
-            CycleButton.Content = "▲ Cycle";
+            // 열 때마다 Data 폴더를 다시 읽어 새로 추가된 파일도 보여줍니다.
+            CycleFileList.ItemsSource = new JsonComboLoader().LoadFileInfos(
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data"));
+
+            CycleFlyoutPopup.IsOpen = true;
         }
-        else
+
+        // 창 뒤에서 오른쪽으로 슉 나왔다가, 닫을 때 다시 창 뒤로 슉 들어갑니다.
+        var slide = new DoubleAnimation
         {
-            CyclePanel.Height = 0;
-            CycleButton.Content = "▼ Cycle";
+            To = isCyclePanelOpen ? 0 : -(CycleFlyout.Width + 10),
+            Duration = TimeSpan.FromMilliseconds(180),
+            EasingFunction = new CubicEase { EasingMode = isCyclePanelOpen ? EasingMode.EaseOut : EasingMode.EaseIn }
+        };
+
+        if (!isCyclePanelOpen)
+        {
+            slide.Completed += (_, _) =>
+            {
+                if (!isCyclePanelOpen)
+                    CycleFlyoutPopup.IsOpen = false;
+            };
         }
+
+        CycleFlyoutTransform.BeginAnimation(TranslateTransform.XProperty, slide);
+
+        CycleListButton.Content = isCyclePanelOpen ? "✕ 목록" : "☰ 목록";
     }
 
-    private void CycleButton_Click(object sender, RoutedEventArgs e) // 사이클 버튼 클릭 이벤트
+    // 창을 옮기거나 크기를 바꾸면 목록 팝업도 따라가게 합니다.
+    private void RepositionCycleFlyout()
+    {
+        if (!CycleFlyoutPopup.IsOpen)
+            return;
+
+        CycleFlyoutPopup.HorizontalOffset += 0.1;
+        CycleFlyoutPopup.HorizontalOffset -= 0.1;
+    }
+
+    private void CycleListButton_Click(object sender, RoutedEventArgs e) // 사이클 목록 버튼 클릭 이벤트
     {
         ToggleCyclePanel();
     }
@@ -335,7 +370,7 @@ public partial class MainWindow : Window
         if (isRunning)
             return;
 
-        isRunning = true;
+        SetRunning(true);
 
         comboEngine.Reset();
 
@@ -366,12 +401,12 @@ public partial class MainWindow : Window
         InitializeDisplay();
     }
 
-    // 시작 메뉴 / 사이클 목록 / 진행 화면 중 하나만 보여줍니다.
+    // 시작 메뉴 / 진행 화면 중 하나만 보여줍니다.
     private void ShowView(UIElement view)
     {
         StartMenu.Visibility = view == StartMenu ? Visibility.Visible : Visibility.Collapsed;
-        CycleListView.Visibility = view == CycleListView ? Visibility.Visible : Visibility.Collapsed;
         CycleView.Visibility = view == CycleView ? Visibility.Visible : Visibility.Collapsed;
+        MenuButton.Visibility = view == StartMenu ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void StartButton_Click(object sender, RoutedEventArgs e) // 사이클 시작
@@ -380,24 +415,62 @@ public partial class MainWindow : Window
 
         comboEngine.SetCombo(characterCycles[currentCharacter]);
 
-        isRunning = true;
+        SetRunning(true);
 
         InitializeDisplay();
 
         ShowView(CycleView);
     }
 
-    private void ListButton_Click(object sender, RoutedEventArgs e) // 사이클 목록
+    // 고정: 클릭이 창을 통과하게 합니다. 고정 중에는 버튼을 누를 수 없으므로 F10으로 해제합니다.
+    private void ToggleLock()
     {
-        CharacterCycleList.ItemsSource = characterCycles.Select(pair =>
-            $"{pair.Key.DisplayName()}  {pair.Value.Name} : " +
-            string.Join(" → ", pair.Value.Steps.Select(step => step.DisplayName())));
+        clickThrough = !clickThrough;
 
-        ShowView(CycleListView);
+        overlayService.SetClickThrough(this, clickThrough);
+
+        LockButton.Content = clickThrough ? "고정됨 (F10)" : "고정";
     }
 
-    private void BackButton_Click(object sender, RoutedEventArgs e)
+    private void LockButton_Click(object sender, RoutedEventArgs e)
     {
+        ToggleLock();
+    }
+
+    private void ExitButton_Click(object sender, RoutedEventArgs e) // 프로그램 종료
+    {
+        Close();
+    }
+
+    // 사이클 진행 상태를 바꾸고 멈춤/시작 버튼 표시를 맞춥니다.
+    private void SetRunning(bool running)
+    {
+        isRunning = running;
+
+        PauseButton.Content = running ? "⏸ 멈춤" : "▶ 시작";
+    }
+
+    private void MenuButton_Click(object sender, RoutedEventArgs e) // 사이클을 멈추고 시작 메뉴로 돌아갑니다.
+    {
+        SetRunning(false);
+
         ShowView(StartMenu);
     }
+
+    private void PauseButton_Click(object sender, RoutedEventArgs e) // 사이클 멈춤 / 다시 시작
+    {
+        SetRunning(!isRunning);
+    }
+
+    private void OpacityButton_Click(object sender, RoutedEventArgs e) // 창 투명도 전환
+    {
+        opacityLevelIndex = (opacityLevelIndex + 1) % opacityLevels.Length;
+
+        var (opacity, label) = opacityLevels[opacityLevelIndex];
+
+        // 배경과 버튼을 포함한 창 전체에 적용합니다.
+        Opacity = opacity;
+        OpacityButton.Content = label;
+    }
+
 }

@@ -29,6 +29,9 @@ public class NextInputItem : INotifyPropertyChanged
         }
     }
 
+    // 반복 시작 지점 표시
+    public bool IsLoopStart { get; set; }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void OnPropertyChanged(
