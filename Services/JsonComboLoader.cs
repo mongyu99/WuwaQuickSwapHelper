@@ -1,34 +1,68 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using WuwaQuickSwapHelper.Models;
 
 namespace WuwaQuickSwapHelper.Services;
 
 public class JsonComboLoader
 {
+	public static string DataDirectory =>
+		Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+
 	public List<Combo> Load(string path)
 	{
-		if (!File.Exists(path))
+		// 파일이 없거나 검사를 통과하지 못하면 앱이 종료되지 않도록 빈 목록을 반환합니다.
+		if (!File.Exists(path) || new FileInfo(path).Length > ComboValidator.MaxJsonLength)
 		{
-			// 파일이 없어도 앱이 종료되지 않도록 빈 목록을 반환합니다.
 			return new List<Combo>();
 		}
 
 		var json = File.ReadAllText(path);
 
-		var options = new JsonSerializerOptions
+		if (!ComboValidator.TryParse(json, out var combos, out var error))
 		{
-			PropertyNameCaseInsensitive = true
-		};
+			System.Diagnostics.Debug.WriteLine($"{path} : {error}");
+			return new List<Combo>();
+		}
 
-		options.Converters.Add(
-			new JsonStringEnumConverter()
-		);
+		return combos;
+	}
 
-		var result = JsonSerializer.Deserialize<List<Combo>>(json, options);
+	// Data 폴더의 모든 파일에서 검사를 통과한 콤보를 모읍니다.
+	public List<Combo> LoadAll(string directory)
+	{
+		if (!Directory.Exists(directory))
+		{
+			return new List<Combo>();
+		}
 
-		return result ?? new List<Combo>();
+		return Directory.GetFiles(directory, "*.json")
+			.OrderBy(f => f)
+			.SelectMany(Load)
+			.ToList();
+	}
+
+	// 검사를 통과한 콤보를 Data 폴더에 새 파일로 저장합니다.
+	// 파일 이름은 JSON 내용이 아니라 앱이 만든 안전한 이름만 사용합니다.
+	public string Save(string directory, List<Combo> combos)
+	{
+		Directory.CreateDirectory(directory);
+
+		var safeName = new string(combos[0].Name
+			.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_')
+			.Take(30)
+			.ToArray());
+
+		if (safeName.Length == 0)
+		{
+			safeName = "combo";
+		}
+
+		var path = Path.Combine(directory, $"{safeName}_{DateTime.Now:yyyyMMddHHmmss}.json");
+
+		File.WriteAllText(path, JsonSerializer.Serialize(combos, ComboValidator.WriteOptions));
+
+		return path;
 	}
 
 	// 폴더 안의 모든 사이클 JSON 파일 정보를 읽습니다. (이름 / 사용 캐릭터 / 제작자)
@@ -51,20 +85,18 @@ public class JsonComboLoader
 				Author = "-"
 			};
 
-			try
-			{
-				var first = Load(file).FirstOrDefault();
+			var first = Load(file).FirstOrDefault();
 
-				if (first != null)
-				{
-					if (!string.IsNullOrWhiteSpace(first.Name)) info.Name = first.Name;
-					if (first.Characters.Count > 0) info.Characters = string.Join(", ", first.Characters);
-					if (!string.IsNullOrWhiteSpace(first.Author)) info.Author = first.Author;
-				}
-			}
-			catch (Exception)
+			if (first == null)
 			{
-				// 형식이 잘못된 파일은 파일 이름만 표시합니다.
+				// 검사를 통과하지 못한 파일은 표시만 하고 사용하지 않습니다.
+				info.Characters = "(잘못된 파일)";
+			}
+			else
+			{
+				if (!string.IsNullOrWhiteSpace(first.Name)) info.Name = first.Name;
+				if (first.Characters.Count > 0) info.Characters = string.Join(", ", first.Characters);
+				if (!string.IsNullOrWhiteSpace(first.Author)) info.Author = first.Author;
 			}
 
 			infos.Add(info);

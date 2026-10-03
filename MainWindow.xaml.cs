@@ -7,6 +7,7 @@ using WuwaQuickSwapHelper.Engine;
 using WuwaQuickSwapHelper.Models;
 using WuwaQuickSwapHelper.Services;
 using System.IO;
+using System.Net.Http;
 
 namespace WuwaQuickSwapHelper;
 
@@ -86,6 +87,8 @@ public partial class MainWindow : Window
 
         NextInputList.ItemsSource = displayItems;
         NextInputList.Items.Refresh();
+
+        UpdatePreviewLines();
     }
 
     [DllImport("user32.dll")]
@@ -114,6 +117,9 @@ public partial class MainWindow : Window
         comboList = loader.Load(path);
 
         comboEngine = new ComboEngine(characterCycles[currentCharacter]);
+
+        // 체크리스트 상태 복원 (InitializeDisplay 전에 설정)
+        ShowNextLinesCheckBox.IsChecked = AppSettings.Load().ShowNextLines;
 
         InitializeDisplay();
 
@@ -406,6 +412,8 @@ public partial class MainWindow : Window
     {
         StartMenu.Visibility = view == StartMenu ? Visibility.Visible : Visibility.Collapsed;
         CycleView.Visibility = view == CycleView ? Visibility.Visible : Visibility.Collapsed;
+        ImportView.Visibility = view == ImportView ? Visibility.Visible : Visibility.Collapsed;
+        ReceiveView.Visibility = view == ReceiveView ? Visibility.Visible : Visibility.Collapsed;
         MenuButton.Visibility = view == StartMenu ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -448,6 +456,123 @@ public partial class MainWindow : Window
         isRunning = running;
 
         PauseButton.Content = running ? "⏸ 멈춤" : "▶ 시작";
+    }
+
+    private void ImportMenuButton_Click(object sender, RoutedEventArgs e) // 코드 입력 화면
+    {
+        ImportTextBox.Clear();
+        ImportStatusText.Text = "";
+
+        ShowView(ImportView);
+    }
+
+    // 붙여넣은 JSON을 검사하고 통과하면 Data 폴더에 저장합니다.
+    private void ImportSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        ImportStatusText.Text = SaveValidatedJson(ImportTextBox.Text);
+    }
+
+    // 내보내기: Data 폴더의 콤보 전체를 JSON 파일 하나로 저장합니다. (서명하지 않음)
+    private void ExportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var combos = new JsonComboLoader().LoadAll(JsonComboLoader.DataDirectory);
+
+        if (combos.Count == 0)
+        {
+            MessageBox.Show(this, "내보낼 콤보가 없습니다.", "내보내기");
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = $"WuwaCombos_{DateTime.Now:yyyyMMdd}.json",
+            Filter = "JSON 파일 (*.json)|*.json"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        File.WriteAllText(dialog.FileName, System.Text.Json.JsonSerializer.Serialize(combos, ComboValidator.WriteOptions));
+
+        MessageBox.Show(this, $"콤보 {combos.Count}개를 저장했습니다.\n{dialog.FileName}", "내보내기");
+    }
+
+    private void ReceiveMenuButton_Click(object sender, RoutedEventArgs e) // 받기 화면
+    {
+        ApiKeyBox.Password = AppSettings.Load().ApiKey;
+        ReceiveCodeBox.Clear();
+        ReceiveStatusText.Text = "";
+
+        ShowView(ReceiveView);
+    }
+
+    // 받기: API 키로 웹사이트에서 JSON을 받아 검사 후 저장합니다.
+    private async void ReceiveButton_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = AppSettings.Load();
+        settings.ApiKey = ApiKeyBox.Password.Trim();
+        settings.Save();
+
+        ReceiveButton.IsEnabled = false;
+        ReceiveStatusText.Text = "받는 중...";
+
+        try
+        {
+            var json = await new ComboApiService().FetchAsync(settings, ReceiveCodeBox.Text);
+
+            ReceiveStatusText.Text = SaveValidatedJson(json);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            ReceiveStatusText.Text = ex is TaskCanceledException ? "응답 시간이 초과되었습니다." : ex.Message;
+        }
+        finally
+        {
+            ReceiveButton.IsEnabled = true;
+        }
+    }
+
+    // 화이트리스트 검사를 통과한 JSON만 Data 폴더에 저장하고 결과 메시지를 돌려줍니다.
+    private static string SaveValidatedJson(string json)
+    {
+        if (!ComboValidator.TryParse(json, out var combos, out var error))
+        {
+            return $"저장 실패 - {error}";
+        }
+
+        var path = new JsonComboLoader().Save(JsonComboLoader.DataDirectory, combos);
+
+        return $"콤보 {combos.Count}개 저장됨 ({Path.GetFileName(path)})";
+    }
+
+    // 다음 3줄 한번에 보기: 현재 줄 아래에 이 사이클이 끝난 뒤 이어질 2줄을 보여줍니다.
+    // 반복 구간이 있으면 반복 시작 위치부터, 없으면 처음부터 이어집니다.
+    private const int PreviewLineCount = 2;
+
+    private void UpdatePreviewLines()
+    {
+        var showNextLines = ShowNextLinesCheckBox.IsChecked == true;
+
+        PreviewLines.Visibility = showNextLines ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!showNextLines)
+            return;
+
+        var combo = comboEngine.CurrentCombo;
+        int start = combo.HasLoop ? combo.LoopStartIndex : 0;
+
+        var nextLine = combo.Steps.Skip(start).Select(step => step.DisplayName()).ToList();
+
+        PreviewLines.ItemsSource = Enumerable.Repeat(nextLine, PreviewLineCount).ToList();
+    }
+
+    private void ShowNextLinesCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdatePreviewLines();
+
+        var settings = AppSettings.Load();
+        settings.ShowNextLines = ShowNextLinesCheckBox.IsChecked == true;
+        settings.Save();
     }
 
     private void MenuButton_Click(object sender, RoutedEventArgs e) // 사이클을 멈추고 시작 메뉴로 돌아갑니다.

@@ -1,4 +1,6 @@
-﻿namespace WuwaQuickSwapHelper.Models;
+﻿using System.Text.Json.Serialization;
+
+namespace WuwaQuickSwapHelper.Models;
 
 public class Combo
 {
@@ -17,5 +19,6 @@ public class Combo
     // 반복 시작 위치 (-1 = 반복 없음). 사이클 완료 후 이 단계부터 다시 이어집니다.
     public int LoopStartIndex { get; set; } = -1;
 
+    [JsonIgnore]
     public bool HasLoop => LoopStartIndex >= 0 && LoopStartIndex < Steps.Count;
 }
